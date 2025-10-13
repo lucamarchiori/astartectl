@@ -25,8 +25,8 @@ jobs:
     # Since v3, golangci-lint needs explicit go-setup
     - uses: actions/setup-go@v4
       with:
-        go-version: v1.20.x
+        go-version: v1.25.x
     # Run golint-ci
-    - uses: golangci/golangci-lint-action@v3
+    - uses: golangci/golangci-lint-action@v4
       with:
         version: v1.53

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -29,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/retry"
 
+	migrationutils "github.com/astarte-platform/astartectl/cmd/cr-migration"
+	"github.com/astarte-platform/astartectl/cmd/cr-migration/v1alpha2tov2alpha1"
 	"github.com/astarte-platform/astartectl/utils"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -37,6 +40,20 @@ import (
 var MigrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Interact with your Astarte instance for performing migration tasks",
+}
+
+var tov2alpha1 = &cobra.Command{
+	Use:     "v2alpha1",
+	Short:   "Migrate Astarte CRs to v2alpha1",
+	RunE:    migrateToV2Alpha1,
+	Example: `astartectl cluster instances migrate api v2alpha1`,
+}
+
+var MigrateApiCmd = &cobra.Command{
+	Use:     "api",
+	Short:   "Migrate Astarte API from one version to another",
+	Example: `astartectl cluster instances migrate api`,
+	Args:    cobra.NoArgs,
 }
 
 var replaceVoyagerCmd = &cobra.Command{
@@ -63,8 +80,17 @@ This is NOT a standalone command, please refer to the Astarte documentation on t
 
 var crdsStoredVersionsBeforeUpgrade = []string{"v1alpha1", "v1alpha2"}
 var crdsStoredVersionsAfterUpgrade = []string{"v1alpha2"}
+var homeDir string
+var err error
 
 func init() {
+	homeDir, err = os.UserHomeDir()
+
+	if err != nil {
+		fmt.Println("Warning: cannot determine the user home directory. Some features may not work properly.", err)
+		homeDir = "/tmp"
+	}
+
 	InstancesCmd.AddCommand(MigrateCmd)
 
 	replaceVoyagerCmd.PersistentFlags().String("operator-name", "astarte-operator-controller-manager", "The name of the Astarte Operator instance.")
@@ -74,6 +100,129 @@ func init() {
 
 	MigrateCmd.AddCommand(replaceVoyagerCmd)
 	MigrateCmd.AddCommand(updateStorageVersionCmd)
+
+	// API Migration to convert api.astarte-platform.org CRs from one version to another
+	MigrateCmd.AddCommand(MigrateApiCmd)
+	MigrateApiCmd.AddCommand(tov2alpha1)
+	MigrateApiCmd.PersistentFlags().Bool("backup-original-cr", true, "If true, backs up the original CR before migration.")
+	MigrateApiCmd.PersistentFlags().Bool("dry-run", true, "If true, saves the migrated CR to a file instead of applying it to the cluster.")
+	MigrateApiCmd.PersistentFlags().String("namespace", "default", "The namespace in which to look for Astarte instances.")
+}
+
+// migrateApi handles the migration of all Astarte instances in the cluster (in a namespace) from one API version to another.
+func migrateToV2Alpha1(command *cobra.Command, args []string) error {
+	sourceVer := astarteV1Alpha2
+	destVer := astarteV2Alpha1
+	fmt.Printf("Astarte instances will be migrated from %s to %s\n", sourceVer.Version, destVer.Version)
+
+	backupOriginalCR, err := command.Flags().GetBool("backup-original-cr")
+	if err != nil {
+		return err
+	}
+
+	dryRun, err := command.Flags().GetBool("dry-run")
+	if err != nil {
+		return err
+	}
+
+	astarteNamespace, err := command.Flags().GetString("namespace")
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Astarte namespace is set to %s\n", astarteNamespace)
+
+	// Get the Astarte instances in the cluster specifically of version v1alpha2
+	// If there are no instances of version v1alpha2, then there is nothing to do here.
+	astarteList, err := kubernetesDynamicClient.Resource(sourceVer).Namespace(astarteNamespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	if len(astarteList.Items) == 0 {
+		return fmt.Errorf("No Astarte instances of version %s found in the cluster. Nothing to do here.", sourceVer.Resource)
+	}
+
+	// List the instances found
+	fmt.Printf("Found %d Astarte instance(s) in the cluster:\n", len(astarteList.Items))
+	for _, astarteObj := range astarteList.Items {
+		fmt.Printf("- %s\n", astarteObj.GetName())
+	}
+
+	// Warn the user of what is about to happen
+	if !dryRun {
+		fmt.Printf("You are about to migrate (convert and apply) all Astarte instances in the namespace %s from %s to %s.\n", astarteNamespace, sourceVer.Version, destVer.Version)
+		proceed, err := utils.AskForConfirmation("Are you sure?")
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			fmt.Println("Ok, nothing left to do here.")
+			return nil
+		}
+	}
+
+	if !backupOriginalCR {
+		fmt.Println("Backing up original CRs is disabled. Proceeding without backup.")
+		proceed, err := utils.AskForConfirmation("Are you sure?")
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			fmt.Println("Ok, nothing left to do here.")
+			return nil
+		}
+	}
+
+	// Migrate each instance
+	for _, astarteObj := range astarteList.Items {
+		fmt.Printf("Migrating Astarte instance %s...\n", astarteObj.GetName())
+
+		// Backup original CR if required
+		if backupOriginalCR {
+
+			backupDir := filepath.Join(homeDir, "astartectl", "cr-backups", astarteObj.GetNamespace())
+			if err := os.MkdirAll(backupDir, 0o755); err != nil {
+				return fmt.Errorf("failed to create backup directory %q: %w", backupDir, err)
+			}
+			backupFile := filepath.Join(backupDir, fmt.Sprintf("%s-backup-%s.yaml", astarteObj.GetName(), astarteObj.GetResourceVersion()))
+			if err := migrationutils.DumpResourceToYAMLFile(&astarteObj, backupFile); err != nil {
+				return fmt.Errorf("failed to back up original CR to %s: %w", backupFile, err)
+			}
+			fmt.Printf("Original CR backed up to %s\n", backupFile)
+		}
+
+		// Convert the CR
+		converted, err := v1alpha2tov2alpha1.ConvertToV2alpha1(&astarteObj)
+		if err != nil {
+			return fmt.Errorf("failed to convert Astarte CR (%s): %w", astarteObj.GetName(), err)
+		}
+
+		// Save the migrated CR to a file
+		d := filepath.Join(homeDir, "astartectl", "cr-migration", destVer.Version, astarteObj.GetNamespace())
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return fmt.Errorf("failed to create a directory for migrated CRs at %q: %w", d, err)
+		}
+		backupFile := filepath.Join(d, fmt.Sprintf("%s-%s.yaml", astarteObj.GetName(), destVer.Version))
+		if err := migrationutils.DumpResourceToYAMLFile(converted, backupFile); err != nil {
+			return fmt.Errorf("failed to save migrated CR to %s: %w", backupFile, err)
+		}
+		fmt.Printf("Migrated CR saved to %s\n", backupFile)
+
+		if !dryRun {
+			// Apply the migrated CR to the cluster
+			proceed, err := utils.AskForConfirmation("Are you sure you want to apply the migrated CR to the cluster?")
+			if err != nil {
+				return err
+			}
+			if !proceed {
+				fmt.Println("Ok, nothing left to do here.")
+				return nil
+			}
+		}
+	}
+
+	return nil
 }
 
 func updateStorageVersionCmdF(command *cobra.Command, args []string) error {

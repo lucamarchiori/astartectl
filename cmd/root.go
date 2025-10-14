@@ -98,7 +98,7 @@ func initConfig() {
 	if err := config.ConfigureViper(cfgContext); err != nil {
 		// If the config does not exist, do not warn - it's simply not there.
 		if _, ok := err.(*os.PathError); !ok {
-			fmt.Fprintf(os.Stderr, "warn: Error while loading configuration: %s\n", err.Error())
+			//fmt.Fprintf(os.Stderr, "warn: Error while loading configuration: %s\n", err.Error())
 		}
 	}
 

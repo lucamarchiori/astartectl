@@ -79,16 +79,7 @@ var (
 		Version:  "v2alpha1",
 		Resource: "astartes",
 	}
-	aviV1Alpha1 = schema.GroupVersionResource{
-		Group:    "api.astarte-platform.org",
-		Version:  "v1alpha1",
-		Resource: "astartevoyageringresses",
-	}
-	adiV1Alpha1 = schema.GroupVersionResource{
-		Group:    "ingress.astarte-platform.org",
-		Version:  "v1alpha1",
-		Resource: "astartedefaultingresses",
-	}
+
 	astarteCRVersions = map[string]schema.GroupVersionResource{
 		"v1alpha1": astarteV1Alpha1,
 		"v1alpha2": astarteV1Alpha2,

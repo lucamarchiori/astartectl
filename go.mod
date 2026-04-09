@@ -4,11 +4,9 @@ go 1.25.0
 
 require (
 	code.cloudfoundry.org/bytefmt v0.67.0
-	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/astarte-platform/astarte-go v0.92.2-0.20241112115810-b8a1c0732cf1
 	github.com/go-openapi/strfmt v0.26.1 // indirect
-	github.com/google/go-github/v30 v30.1.0
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/mitchellh/go-homedir v1.1.0
@@ -37,8 +35,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
-	github.com/google/go-querystring v1.0.0 // indirect
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/iancoleman/orderedmap v0.3.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -65,7 +61,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect

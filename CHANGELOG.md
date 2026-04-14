@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - BREAKING: Remove deprecated instance deploy / show / destroy commands: `astartectl cluster instance show`,
   `astartectl cluster instance deploy`, `astartectl cluster instance destroy`. Obsolete deployment
   profiles are also removed.
+- BREAKING: Remove legacy `astartectl cluster show`, `astartectl cluster instance get-cluster-config`, 
+  `astartectl cluster istance fetch-housekeeping-key` commands. These commands were broken and not 
+  compatible with how Astarte clusters are managed since v1.2. Users should use `kubectl` and `helm` to manage their clusters instead.
   
 ## [24.5.3] - 2026-01-28
 ### Changed

@@ -55,7 +55,7 @@ manage the entire lifecycle of an Astarte instance, including its installation a
 
 // Set here all custom resources for Astarte
 var (
-	kubernetesClient              *kubernetes.Clientset
+	kubernetesClient              *kubernetes.Clientset    //nolint
 	kubernetesAPIExtensionsClient *apiextensions.Clientset //nolint
 	kubernetesDynamicClient       dynamic.Interface
 
